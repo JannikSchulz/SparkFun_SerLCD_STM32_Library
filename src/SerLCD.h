@@ -1,14 +1,22 @@
-#ifndef QWIIC_SER_LCD_H
-#define QWIIC_SER_LCD_H
+/*
+ * SerLCD.h
+ *
+ *  Created on: 03.06.2019
+ *      Author: Mario Hesse
+ *     Licence: CC-0
+ */
 
-#include <Arduino.h>
-#include <Wire.h>
-#include <Stream.h>
-#include <SPI.h>
+#ifndef INC_SERLCD_H_
+#define INC_SERLCD_H_
 
-#define DISPLAY_ADDRESS1 0x72 //This is the default address of the OpenLCD
-#define MAX_ROWS 4
-#define MAX_COLUMNS 20
+#include "stm32f3xx_hal.h"
+#include "main.h"
+
+
+
+#define DISPLAY_ADDRESS1 0x72 									//This is the default address of the OpenLCD
+#define MAX_ROWS 4												// ammount of columns on the display (16 or 20)
+#define MAX_COLUMNS 16											// ammount of lines on the display (1, 2 or 4)
 
 //OpenLCD command characters
 #define SPECIAL_COMMAND 254  //Magic number for sending a special command
@@ -52,81 +60,85 @@
 #define LCD_MOVERIGHT 0x04
 #define LCD_MOVELEFT 0x00
 
-class SerLCD : public Print
-{
+// errors
+#define LCD_OK 0					// no error
+#define LCD_ERROR_STD 1				// error on display - not near declared
+#define LCD_ERROR_TRANSMIT_I2C 2	// error on display while transmission (i2c)
 
-  public:
-	SerLCD();
-	~SerLCD();
-	void begin(TwoWire &wirePort);
-	void begin(TwoWire &wirePort, byte i2c_addr);
-	void begin(Stream &serial);
-	void begin(SPIClass &spiPort, byte csPin);
-//Only available for Arduino 1.6 and greater
-#ifdef SPI_HAS_TRANSACTION
-	//pass SPISettings by value to allow settings object creation in fucntion call like examples
-	void begin(SPIClass &spiPort, byte csPin, SPISettings spiSettings);
-#endif
-	void clear();
-	void home();
-	void setCursor(byte col, byte row);
-	void createChar(byte location, byte charmap[]);
-	void writeChar(byte location);
-	virtual size_t write(uint8_t);
-	virtual size_t write(const uint8_t *buffer, size_t size);
-	virtual size_t write(const char *str);
-	void noDisplay();
-	void display();
-	void noCursor();
-	void cursor();
-	void noBlink();
-	void blink();
-	void scrollDisplayLeft();
-	void scrollDisplayRight();
-	void scrollDisplayLeft(byte count);
-	void scrollDisplayRight(byte count);
-	void moveCursorLeft();
-	void moveCursorRight();
-	void moveCursorLeft(byte count);
-	void moveCursorRight(byte count);
-	void setBacklight(unsigned long rgb);
-	void setBacklight(byte r, byte g, byte b);
-	void setFastBacklight(unsigned long rgb);
-	void setFastBacklight(byte r, byte g, byte b);
-	void leftToRight();
-	void rightToLeft();
-	void autoscroll();
-	void noAutoscroll();
-	void setContrast(byte new_val);
-	void setAddress(byte new_addr);
-	void command(byte command);
-	void specialCommand(byte command);
-	void specialCommand(byte command, byte count);
+uint8_t displayInit(I2C_HandleTypeDef *hi2c);
+uint8_t displayColor(uint8_t r, uint8_t g, uint8_t b);
+uint8_t displayCommand(uint8_t command);
+uint8_t displaySpecialCommand(uint8_t command);
+char* displayPrepareText(uint16_t Value);
+uint8_t displayWriteString(char *String, uint16_t Length);
+uint8_t DisplayClear();
+uint8_t displayHome();
+uint8_t displaySetCursor(uint8_t col, uint8_t row);
 
-	void enableSystemMessages();
-	void disableSystemMessages();
-	void enableSplash();
-	void disableSplash();
-	void saveSplash();
 
-  private:
-	TwoWire *_i2cPort = NULL;   //The generic connection to user's chosen I2C hardware
-	Stream *_serialPort = NULL; //The generic connection to user's chosen serial hardware
-	SPIClass *_spiPort = NULL;  //The generic connection to user's chosen spi hardware
 
-//SPI transactions only available for Arduino 1.6 and later
-#ifdef SPI_HAS_TRANSACTION
-	SPISettings _spiSettings = SPISettings(100000, MSBFIRST, SPI_MODE0);
-	bool _spiTransaction = false; //since we pass by value, we need a flag
-#endif
-	byte _csPin = 10;
-	byte _i2cAddr = DISPLAY_ADDRESS1;
-	byte _displayControl = LCD_DISPLAYON | LCD_CURSOROFF | LCD_BLINKOFF;
-	byte _displayMode = LCD_ENTRYLEFT | LCD_ENTRYSHIFTDECREMENT;
-	void init();
-	void beginTransmission();
-	void transmit(byte data);
-	void endTransmission();
-};
 
-#endif
+
+
+/*
+void begin(TwoWire &wirePort);
+
+void clear();
+void home();
+void setCursor(byte col, byte row);
+void createChar(byte location, byte charmap[]);
+void writeChar(byte location);
+void writeInt(uint8_t);
+void writeIntBuff(const uint8_t *buffer, size_t size);
+void writeChar(const char *str);
+void noDisplay();
+void display();
+void noCursor();
+void cursor();
+void noBlink();
+void blink();
+void scrollDisplayLeft();
+void scrollDisplayRight();
+void scrollDisplayLeft(byte count);
+void scrollDisplayRight(byte count);
+void moveCursorLeft();
+void moveCursorRight();
+void moveCursorLeft(byte count);
+void moveCursorRight(byte count);
+void setBacklight(unsigned long rgb);
+void setBacklight(byte r, byte g, byte b);
+void setFastBacklight(unsigned long rgb);
+void setFastBacklight(byte r, byte g, byte b);
+void leftToRight();
+void rightToLeft();
+void autoscroll();
+void noAutoscroll();
+void setContrast(byte new_val);
+void setAddress(byte new_addr);
+void command(byte command);
+void specialCommand(byte command);
+void specialCommand(byte command, byte count);
+
+void enableSystemMessages();
+void disableSystemMessages();
+void enableSplash();
+void disableSplash();
+void saveSplash();
+
+TwoWire *_i2cPort = NULL;   //The generic connection to user's chosen I2C hardware
+Stream *_serialPort = NULL; //The generic connection to user's chosen serial hardware
+SPIClass *_spiPort = NULL;  //The generic connection to user's chosen spi hardware
+
+byte _csPin = 10;
+
+void init();
+void beginTransmission();
+void transmit(byte data);
+void endTransmission();
+*/
+
+
+
+
+
+#endif /* INC_SERLCD_H_ */

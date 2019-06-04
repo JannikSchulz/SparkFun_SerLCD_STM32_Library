@@ -1,4 +1,15 @@
-/*
+/**
+ * SerLCD.h
+ * @file		SerLCD.h
+ * @brief 		STM32 Library for SparkFun OpenLCD display based on HAL
+ * @date 		03.06.2019
+ * @version		0.0.1
+ * @author 		Mario Hesse
+ * @copyright 	MIT Licence
+ *
+ *
+ * Original information copied form LCD library for SparkFun RGB 3.3v Serial Open LCD display
+ * ------------------------------------------------------------------------------------------
  * LCD library for SparkFun RGB 3.3v Serial Open LCD display
  * with an attached Qwiic adapter.
  *
@@ -41,7 +52,6 @@
  *
  * The OpenLCD has 4.7k pull up resistors on SDA and SCL. If you have other devices on the
  * I2C bus then you may want to disable the pull up resistors by clearing the PU (pull up) jumper.
-
  * OpenLCD will work at 400kHz Fast I2C. Use the .setClock() call shown below to set the data rate
  * faster if needed.
  * Command cheat sheet:
@@ -84,687 +94,276 @@
  *		For example, to change the baud rate to 115200 send 124 followed by 18.
  *
  */
+ */
+
 #include "SerLCD.h"
+#include "main.h"
+#include "dma.h"
+#include "i2c.h"
+#include "tim.h"
+#include "usart.h"
+#include "gpio.h"
 
-//<<constructor>> setup using defaults
-SerLCD::SerLCD()
-{
-}
 
-//<<destructor>>
-SerLCD::~SerLCD()
-{ /*nothing to destruct*/
-}
 
-/*
- * Set up the i2c communication with the SerLCD.
- * wirePort - TwoWire port
- * ic2_addr - I2C address
- */
-void SerLCD::begin(TwoWire &wirePort, byte i2c_addr)
-{
-  _i2cAddr = i2c_addr;
+uint8_t _i2cAddr = DISPLAY_ADDRESS1;
+I2C_HandleTypeDef *_i2cHandler;
+uint8_t _displayControl = LCD_DISPLAYON | LCD_CURSOROFF | LCD_BLINKOFF;
+uint8_t _displayMode = LCD_ENTRYLEFT | LCD_ENTRYSHIFTDECREMENT;
 
-  begin(wirePort);
-} // begin
+
 
 /*
- * Set up the i2c communication with the SerLCD.
+ *  @brief	Initial start of the display - defines the maximum rows and
+ *  		columns on the display refered to
+ *  		• MAX_ROWS and
+ *  		• MAX_COLUMNS
+ * 	@param	hi2c - pointer to the i2c handler
+ *  @retval status (0...OK, other...error)
  */
-void SerLCD::begin(TwoWire &wirePort)
+uint8_t displayInit(I2C_HandleTypeDef *hi2c)
 {
-  _i2cPort = &wirePort; //Grab which port the user wants us to use
-  _serialPort = NULL;   //Set to null to be safe
-  _spiPort = NULL;      //Set to null to be safe
+	uint8_t retval = LCD_OK;
 
-  //We expect caller to begin their I2C port, with the speed of their choice external to the library
-  //But if they forget, we start the hardware here.
-  _i2cPort->begin();
+	uint8_t rows;
+	uint8_t columns;
 
-  //Call init function since display may have been left in unknown state
-  init();
-} // begin
+	_i2cHandler = hi2c;			// pointer for i2c handler is stored in library
 
-/*
- * Set up the serial communication with the SerLCD.
- */
-void SerLCD::begin(Stream &serialPort)
-{
-  _serialPort = &serialPort; //Grab which port the user wants us to use
-  _i2cPort = NULL;           //Set to null to be safe
-  _spiPort = NULL;           //Set to null to be safe
+	switch(MAX_ROWS)
+	{
+	case 1: 	rows = 0x07;
+				break;
 
-  //Call init function since display may have been left in unknown state
-  init();
-} // begin
+	case 2:		rows = 0x06;
+				break;
 
-//Only available in Arduino 1.6 or later
-#ifdef SPI_HAS_TRANSACTION
-/*
- * Set up the SPI communication with the SerLCD using SPI transactions
- *
- * NB we pass SPISettings by value, since many of the examples for the SPI
- * transactions create the settings object in the function call, and that only
- * works if the function passes the object by value.
- */
-void SerLCD::begin(SPIClass &spiPort, byte csPin, SPISettings spiSettings)
-{
-  _spiSettings = spiSettings;
-  _spiTransaction = true;
+	case 4: 	rows = 0x05;
+				break;
 
-  begin(spiPort, csPin);
-} // begin
-#endif
+	default:	rows = 0x07;
+				retval = LCD_ERROR_STD;
+				break;
 
-/*
- * Set up the SPI communication with the SerLCD.
- */
-void SerLCD::begin(SPIClass &spiPort, byte csPin)
-{
-  _csPin = csPin;
+	}
 
-  pinMode(csPin, OUTPUT);    //set pin to output, in case user forgot
-  digitalWrite(csPin, HIGH); //deselect dispaly, in case user forgot
+	switch(MAX_COLUMNS)
+	{
+	case 16: 	columns = 0x04;
+				break;
 
-  _spiPort = &spiPort; //Grab the port the user wants us to use
-  _i2cPort = NULL;     //Set to null to be safe
-  _serialPort = NULL;  //Set to null to be safe
+	case 20:	columns = 0x03;
+				break;
 
-  _spiPort->begin(); //call begin, in case the user forgot
+	default:	columns = 0x04;
+				retval = LCD_ERROR_STD;
+				break;
 
-  //Call init function since display may have been left in unknown state
-  init();
-} // begin
+	}
 
-//private functions for serial transmission
-/*
- * Begin transmission to the device
- */
-void SerLCD::beginTransmission()
-{
-  //do nothing if using serialPort
-  if (_i2cPort)
-  {
-    _i2cPort->beginTransmission(_i2cAddr); // transmit to device
-  }
-  else if (_spiPort)
-  {
-#ifdef SPI_HAS_TRANSACTION
-    if (_spiTransaction)
+    uint8_t TransmitData[6] = {SETTING_COMMAND, columns, 			// maximum columns
+    						   SETTING_COMMAND, rows, 				// maximum rows
+							   SETTING_COMMAND, CLEAR_COMMAND}; 	// clear display
+
+    if(HAL_I2C_Master_Transmit(_i2cHandler, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
     {
-      _spiPort->beginTransaction(_spiSettings); //gain control of the SPI bus
-    }                                           //if _spiSettings
-#endif
-    digitalWrite(_csPin, LOW);
-    delay(10); //wait a bit for display to enable
-  }            // if-else
-} //beginTransmission
+    	retval = LCD_ERROR_TRANSMIT_I2C;
+    }
+
+    return retval;
+}
+
+
 
 /*
- * Send data to the device
+ * @brief  Defines a RGB display background color
+ * @param  r - can be 0...255
+ * @param  g - can be 0...255
+ * @param  b - can be 0...255
  *
- * data - byte to send
  */
-void SerLCD::transmit(uint8_t data)
+uint8_t displayColor(uint8_t r, uint8_t g, uint8_t b)
 {
-  if (_i2cPort)
-  {
-    _i2cPort->write(data); // transmit to device
-  }
-  else if (_serialPort)
-  {
-    _serialPort->write(data);
-  }
-  else if (_spiPort)
-  {
-    _spiPort->transfer(data);
-  } // if-else
-} //transmit
+	uint8_t retval = LCD_OK;
+
+	// size reduction of the percentage to a value between 0 and 29
+	if(r != 0)
+		r = r*29/255;
+	if(g != 0)
+		g = g*29/255;
+	if(b != 0)
+		b = b*29/255;
+
+	// create i2c data stream
+    uint8_t TransmitData[10] = {SPECIAL_COMMAND,								//Send special command character
+    						    LCD_DISPLAYCONTROL |(_displayControl & ~LCD_DISPLAYON), // turn display off
+    						    SETTING_COMMAND, (128 + r),						// red: 0...100% ~ 0...29
+    						    SETTING_COMMAND, (158 + g), 					// green: 0...100% ~ 0...29
+							    SETTING_COMMAND, (188 + b), 					// blue: 0...100% ~ 0...29
+								SPECIAL_COMMAND,                      			//Send special command character
+								LCD_DISPLAYCONTROL | (_displayControl |= LCD_DISPLAYON)}; // turn display off as before
+
+    // transmission of data stream
+    if(HAL_I2C_Master_Transmit(&hi2c1, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
+    	retval = LCD_ERROR_TRANSMIT_I2C;
+    HAL_Delay(50);
+
+	return retval;
+}
+
+
 
 /*
- * Begin transmission to the device
+ * @brief	Send a command to the display.
+ * 			Used by other functions.
+ * @retval	status (0...OK, other...error)
  */
-void SerLCD::endTransmission()
+uint8_t displayCommand(uint8_t command)
 {
-  //do nothing if using Serial port
-  if (_i2cPort)
-  {
-    _i2cPort->endTransmission(); // transmit to device
-  }
-  else if (_spiPort)
-  {
-    digitalWrite(_csPin, HIGH); //disable display
-#ifdef SPI_HAS_TRANSACTION
-    if (_spiTransaction)
+	uint8_t retval = LCD_OK;
+	uint8_t TransmitData[2] = {SETTING_COMMAND, command}; 												// create data stream
+	if(HAL_I2C_Master_Transmit(&hi2c1, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
+		retval = LCD_ERROR_TRANSMIT_I2C;
+	HAL_Delay(10); //Wait a bit longer for special display commands
+	return retval;
+}
+
+
+
+/*
+ * @brief	Send a special command to the display.  Used by other functions.
+ * @retval	status (0...OK, other...error)
+ */
+uint8_t displaySpecialCommand(uint8_t command)
+{
+	uint8_t retval = LCD_OK;
+	uint8_t TransmitData[2] = {SPECIAL_COMMAND, command}; 												// create data stream
+	if(HAL_I2C_Master_Transmit(&hi2c1, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
+		retval = LCD_ERROR_TRANSMIT_I2C;
+	HAL_Delay(50); //Wait a bit longer for special display commands
+	return retval;
+}
+
+
+
+
+char* displayPrepareText(uint16_t Value)
+{
+	extern char DisplayText[DisplayChar];
+    strcpy(DisplayText, "ADC:      Bit ");				// create 1. row
+    //strcat(DisplayText, "                ");				// create 2. row
+    char ValueString[5] = {""};
+    snprintf(ValueString, 5, "%d", Value);
+
+    uint8_t i = 0;
+
+    if (ValueString[3] == 0)
     {
-      _spiPort->endTransaction(); //let go of the SPI bus
-    }                             //if _spiSettings
-#endif
-    delay(10); //wait a bit for display to disable
-  }            // if-else
-} //beginTransmission
+    	i=1;
+    }
+    else
+    	DisplayText[8+i] = ValueString[3];
 
-/*
- * Initialize the display
- *
- */
-void SerLCD::init()
-{
-  beginTransmission();
-  transmit(SPECIAL_COMMAND);                      //Send special command character
-  transmit(LCD_DISPLAYCONTROL | _displayControl); //Send the display command
-  transmit(SPECIAL_COMMAND);                      //Send special command character
-  transmit(LCD_ENTRYMODESET | _displayMode);      //Send the entry mode command
-  transmit(SETTING_COMMAND);                      //Put LCD into setting mode
-  transmit(CLEAR_COMMAND);                        //Send clear display command
-  endTransmission();                              //Stop transmission
-  delay(50);                                      //let things settle a bit
-} //init
+    if (ValueString[2] == 0)
+    {
+    	i=2;
+    }
+    else
+       	DisplayText[7+i] = ValueString[2];
 
-/*
-  * Send a command to the display.
-  * Used by other functions.
-  *
-  * byte command to send
-  */
-void SerLCD::command(byte command)
-{
-  beginTransmission();       // transmit to device
-  transmit(SETTING_COMMAND); //Put LCD into setting mode
-  transmit(command);         //Send the command code
-  endTransmission();         //Stop transmission
+    if (ValueString[1] == 0)
+    {
+    	i=3;
+    }
+    else
+       	DisplayText[6+i] = ValueString[1];
 
-  delay(10); //Hang out for a bit
+    if (ValueString[0] == 0)
+    {
+    	i=4;
+    }
+    else
+       	DisplayText[5+i] = ValueString[0];
+
+
+    return DisplayText;
 }
 
-/*
- * Send a special command to the display.  Used by other functions.
- *
- * byte command to send
- */
-void SerLCD::specialCommand(byte command)
-{
-  beginTransmission();       // transmit to device
-  transmit(SPECIAL_COMMAND); //Send special command character
-  transmit(command);         //Send the command code
-  endTransmission();         //Stop transmission
 
-  delay(50); //Wait a bit longer for special display commands
+
+/*
+ * @brief	writes a string to the display
+ * @param	*String - pointer to the string to be written
+ * @param	Length  - length of the string to be written
+ * @retval	status (0...OK, other...error)
+ *
+ */
+uint8_t displayWriteString(char *String, uint16_t Length)
+{
+
+    HAL_I2C_Master_Transmit(_i2cHandler, DISPLAY_ADDRESS1<<1, String, Length, 100);		// transmit data
+    HAL_Delay(50);
+
+    return 0;
 }
 
+
+
 /*
- * Send multiple special commands to the display.
- * Used by other functions.
- *
- * byte command to send
- * byte count number of times to send
+ * @brief	Send the clear command to the display.  This clears the
+ * 			display and forces the cursor to return to the beginning
+ * 			of the display.
+ * @retval 	status (0...OK, other...error)
  */
-void SerLCD::specialCommand(byte command, byte count)
+uint8_t DisplayClear()
 {
-  beginTransmission(); // transmit to device
-
-  for (int i = 0; i < count; i++)
-  {
-    transmit(SPECIAL_COMMAND); //Send special command character
-    transmit(command);         //Send command code
-  }                            // for
-  endTransmission();           //Stop transmission
-
-  delay(50); //Wait a bit longer for special display commands
+	uint8_t retval = displayCommand(CLEAR_COMMAND);
+	HAL_Delay(10);
+	return retval;
 }
 
-/*
- * Send the clear command to the display.  This clears the
- * display and forces the cursor to return to the beginning
- * of the display.
- */
-void SerLCD::clear()
-{
-  command(CLEAR_COMMAND);
-  delay(10); // a little extra delay after clear
-}
+
 
 /*
- * Send the home command to the display.  This returns the cursor
- * to return to the beginning of the display, without clearing
- * the display.
+ * @brief	Send the home command to the display.  This returns the cursor
+ * 			to return to the beginning of the display, without clearing
+ * 			the display.
+ * @retval	status (0...OK, other...error)
  */
-void SerLCD::home()
+uint8_t displayHome()
 {
-  specialCommand(LCD_RETURNHOME);
+	return displayCommand(LCD_RETURNHOME);
 }
 
+
+
 /*
- * Set the cursor position to a particular column and row.
- *
- * column - byte 0 to 19
- * row - byte 0 to 3
- *
- * returns: boolean true if cursor set.
+ * @brief	Set the cursor position to a particular column and row.
+ * @param	col - column number (0...19)
+ * @param	row  - row number (0...3)
+ * @retval	status (0...OK, other...error)
  */
-void SerLCD::setCursor(byte col, byte row)
+uint8_t displaySetCursor(uint8_t col, uint8_t row)
 {
-  int row_offsets[] = {0x00, 0x40, 0x14, 0x54};
+  uint8_t row_offsets[] = {0x00, 0x40, 0x14, 0x54};
 
   //kepp variables in bounds
-  row = max(0, row);            //row cannot be less than 0
-  row = min(row, MAX_ROWS - 1); //row cannot be greater than max rows
+  //row = max(0, row);            //row cannot be less than 0
+  //row = min(row, MAX_ROWS - 1); //row cannot be greater than max rows
 
   //send the command
-  specialCommand(LCD_SETDDRAMADDR | (col + row_offsets[row]));
-} // setCursor
-
-/*
- * Create a customer character
- * byte   location - character number 0 to 7
- * byte[] charmap  - byte array for character
- */
-void SerLCD::createChar(byte location, byte charmap[])
-{
-  location &= 0x7; // we only have 8 locations 0-7
-  beginTransmission();
-  //Send request to create a customer character
-  transmit(SETTING_COMMAND); //Put LCD into setting mode
-  transmit(27 + location);
-  for (int i = 0; i < 8; i++)
-  {
-    transmit(charmap[i]);
-  } // for
-  endTransmission();
-  delay(50); //This takes a bit longer
+  return displaySpecialCommand(LCD_SETDDRAMADDR | (col + row_offsets[row]));
 }
 
-/*
- * Write a customer character to the display
- *
- * byte location - character number 0 to 7
- */
-void SerLCD::writeChar(byte location)
-{
-  location &= 0x7; // we only have 8 locations 0-7
 
-  command(35 + location);
-}
 
-/*
- * Write a byte to the display.
- * Required for Print.
- */
-size_t SerLCD::write(uint8_t b)
-{
-  beginTransmission(); // transmit to device
-  transmit(b);
-  endTransmission(); //Stop transmission
-  delay(10);         // wait a bit
-} // write
 
-/*
- * Write a character buffer to the display.
- * Required for Print.
- */
-size_t SerLCD::write(const uint8_t *buffer, size_t size)
-{
-  size_t n = 0;
-  beginTransmission(); // transmit to device
-  while (size--)
-  {
-    transmit(*buffer++);
-    n++;
-  }                  //while
-  endTransmission(); //Stop transmission
-  delay(10);         //
-  return n;
-} //write
 
-/*
- * Write a string to the display.
- * Required for Print.
- */
-size_t SerLCD::write(const char *str)
-{
-  if (str == NULL)
-    return 0;
-  return write((const uint8_t *)str, strlen(str));
-}
 
-/*
-  * Turn the display off quickly.
-  */
-void SerLCD::noDisplay()
-{
-  _displayControl &= ~LCD_DISPLAYON;
-  specialCommand(LCD_DISPLAYCONTROL | _displayControl);
-} // noDisplay
 
-/*
- * Turn the display on quickly.
- */
-void SerLCD::display()
-{
-  _displayControl |= LCD_DISPLAYON;
-  specialCommand(LCD_DISPLAYCONTROL | _displayControl);
-} // display
 
-/*
-  * Turn the underline cursor off.
-  */
-void SerLCD::noCursor()
-{
-  _displayControl &= ~LCD_CURSORON;
-  specialCommand(LCD_DISPLAYCONTROL | _displayControl);
-} // noCursor
 
-/*
- * Turn the underline cursor on.
- */
-void SerLCD::cursor()
-{
-  _displayControl |= LCD_CURSORON;
-  specialCommand(LCD_DISPLAYCONTROL | _displayControl);
-} // cursor
 
-/*
-  * Turn the blink cursor off.
-  */
-void SerLCD::noBlink()
-{
-  _displayControl &= ~LCD_BLINKON;
-  specialCommand(LCD_DISPLAYCONTROL | _displayControl);
-} // noBlink
 
-/*
- * Turn the blink cursor on.
- */
-void SerLCD::blink()
-{
-  _displayControl |= LCD_BLINKON;
-  specialCommand(LCD_DISPLAYCONTROL | _displayControl);
-} // blink
 
-/*
- * Scroll the display one character to the left, without
- * changing the text
- */
-void SerLCD::scrollDisplayLeft()
-{
-  specialCommand(LCD_CURSORSHIFT | LCD_DISPLAYMOVE | LCD_MOVELEFT);
-} // scrollDisplayLeft
 
-/*
- * Scroll the display multiple characters to the left, without
- * changing the text
- *
- * count byte - number of characters to scroll
- */
-void SerLCD::scrollDisplayLeft(byte count)
-{
-  specialCommand(LCD_CURSORSHIFT | LCD_DISPLAYMOVE | LCD_MOVELEFT, count);
-} // scrollDisplayLeft
-
-/*
- * Scroll the display one character to the right, without
- * changing the text
- */
-void SerLCD::scrollDisplayRight()
-{
-  specialCommand(LCD_CURSORSHIFT | LCD_DISPLAYMOVE | LCD_MOVERIGHT);
-} // scrollDisplayRight
-
-/*
- * Scroll the display multiple characters to the right, without
- * changing the text
- *
- * count byte - number of characters to scroll
- */
-void SerLCD::scrollDisplayRight(byte count)
-{
-  specialCommand(LCD_CURSORSHIFT | LCD_DISPLAYMOVE | LCD_MOVERIGHT, count);
-} // scrollDisplayRight
-
-/*
- *  Move the cursor one character to the left.
- */
-void SerLCD::moveCursorLeft()
-{
-  specialCommand(LCD_CURSORSHIFT | LCD_CURSORMOVE | LCD_MOVELEFT);
-} // moveCursorLeft
-
-/*
- *  Move the cursor multiple characters to the left.
- *
- *  count byte - number of characters to move
- */
-void SerLCD::moveCursorLeft(byte count)
-{
-  specialCommand(LCD_CURSORSHIFT | LCD_CURSORMOVE | LCD_MOVELEFT, count);
-} // moveCursorLeft
-
-/*
- *  Move the cursor one character to the right.
- */
-void SerLCD::moveCursorRight()
-{
-  specialCommand(LCD_CURSORSHIFT | LCD_CURSORMOVE | LCD_MOVERIGHT);
-} // moveCursorRight
-
-/*
- *  Move the cursor multiple characters to the right.
- *
- *  count byte - number of characters to move
- */
-void SerLCD::moveCursorRight(byte count)
-{
-  specialCommand(LCD_CURSORSHIFT | LCD_CURSORMOVE | LCD_MOVERIGHT, count);
-} // moveCursorRight
-
-/*
- * Use a standard hex rgb value (0x00000000 to 0x00FFFFFF) to set
- * the backlight color.
- *
- * The encoded long value has form (0x00RRGGBB) where RR, GG and BB
- * are red, green, blue byte values in hex.  The remaining two most
- * significant bytes of the long value are ignored.
- *
- * rgb - unsigned long hex encoded rgb value.
- */
-void SerLCD::setBacklight(unsigned long rgb)
-{
-  // convert from hex triplet to byte values
-  byte r = (rgb >> 16) & 0x0000FF;
-  byte g = (rgb >> 8) & 0x0000FF;
-  byte b = rgb & 0x0000FF;
-
-  setBacklight(r, g, b);
-}
-
-/*
- * Uses a standard rgb byte triplit eg. (255, 0, 255) to
- * set the backlight color.
- */
-void SerLCD::setBacklight(byte r, byte g, byte b)
-{
-  // map the byte value range to backlight command range
-  byte red = 128 + map(r, 0, 255, 0, 29);
-  byte green = 158 + map(g, 0, 255, 0, 29);
-  byte blue = 188 + map(b, 0, 255, 0, 29);
-
-  //send commands to the display to set backlights
-  beginTransmission(); // transmit to device
-
-  //Turn display off to hide confirmation messages
-  _displayControl &= ~LCD_DISPLAYON;
-  transmit(SPECIAL_COMMAND); //Send special command character
-  transmit(LCD_DISPLAYCONTROL | _displayControl);
-
-  //Set the red, green and blue values
-  transmit(SETTING_COMMAND); //Set red backlight amount
-  transmit(red);
-  transmit(SETTING_COMMAND); //Set green backlight amount
-  transmit(green);
-  transmit(SETTING_COMMAND); //Set blue backlight amount
-  transmit(blue);
-
-  //Turn display back on and end
-  _displayControl |= LCD_DISPLAYON;
-  transmit(SPECIAL_COMMAND);                      //Send special command character
-  transmit(LCD_DISPLAYCONTROL | _displayControl); //Turn display on as before
-  endTransmission();                              //Stop transmission
-  delay(50);                                      //This one is a bit slow
-} // setBacklight
-
-// New backlight function
-void SerLCD::setFastBacklight(unsigned long rgb)
-{
-  // convert from hex triplet to byte values
-  byte r = (rgb >> 16) & 0x0000FF;
-  byte g = (rgb >> 8) & 0x0000FF;
-  byte b = rgb & 0x0000FF;
-
-  setFastBacklight(r, g, b);
-}
-
-//New command - set backlight with LCD messages or delays
-void SerLCD::setFastBacklight(byte r, byte g, byte b)
-{
-  //send commands to the display to set backlights
-  beginTransmission();       // transmit to device
-  transmit(SETTING_COMMAND); //Send special command character
-  transmit(SET_RGB_COMMAND); //Send the set RGB character '+' or plus
-  transmit(r);               //Send the red value
-  transmit(g);               //Send the green value
-  transmit(b);               //Send the blue value
-  endTransmission();         //Stop transmission
-  delay(10);
-} // setFastBacklight
-
-//Enable system messages
-//This allows user to see printing messages like 'UART: 57600' and 'Contrast: 5'
-void SerLCD::enableSystemMessages()
-{
-  beginTransmission();                     // transmit to device
-  transmit(SETTING_COMMAND);               //Send special command character
-  transmit(ENABLE_SYSTEM_MESSAGE_DISPLAY); //Send the set '.' character
-  endTransmission();                       //Stop transmission
-  delay(10);
-}
-
-//Disable system messages
-//This allows user to disable printing messages like 'UART: 57600' and 'Contrast: 5'
-void SerLCD::disableSystemMessages()
-{
-  beginTransmission();                      // transmit to device
-  transmit(SETTING_COMMAND);                //Send special command character
-  transmit(DISABLE_SYSTEM_MESSAGE_DISPLAY); //Send the set '.' character
-  endTransmission();                        //Stop transmission
-  delay(10);
-}
-
-//Enable splash screen at power on
-void SerLCD::enableSplash()
-{
-  beginTransmission();             // transmit to device
-  transmit(SETTING_COMMAND);       //Send special command character
-  transmit(ENABLE_SPLASH_DISPLAY); //Send the set '.' character
-  endTransmission();               //Stop transmission
-  delay(10);
-}
-
-//Disable splash screen at power on
-void SerLCD::disableSplash()
-{
-  beginTransmission();              // transmit to device
-  transmit(SETTING_COMMAND);        //Send special command character
-  transmit(DISABLE_SPLASH_DISPLAY); //Send the set '.' character
-  endTransmission();                //Stop transmission
-  delay(10);
-}
-
-//Save the current display as the splash
-void SerLCD::saveSplash()
-{
-  //Save whatever is currently being displayed into EEPROM
-  //This will be displayed at next power on as the splash screen
-  beginTransmission();                      // transmit to device
-  transmit(SETTING_COMMAND);                //Send special command character
-  transmit(SAVE_CURRENT_DISPLAY_AS_SPLASH); //Send the set Ctrl+j character
-  endTransmission();                        //Stop transmission
-  delay(10);
-}
-
-/*
- * Set the text to flow from left to right.  This is the direction
- * that is common to most Western languages.
- */
-void SerLCD::leftToRight()
-{
-  _displayMode |= LCD_ENTRYLEFT;
-  specialCommand(LCD_ENTRYMODESET | _displayMode);
-} // leftToRight
-
-/*
- * Set the text to flow from right to left.
- */
-void SerLCD::rightToLeft()
-{
-  _displayMode &= ~LCD_ENTRYLEFT;
-  specialCommand(LCD_ENTRYMODESET | _displayMode);
-} //rightToLeft
-
-/*
- * Turn autoscrolling on. This will 'right justify' text from
- * the cursor.
- */
-void SerLCD::autoscroll()
-{
-  _displayMode |= LCD_ENTRYSHIFTINCREMENT;
-  specialCommand(LCD_ENTRYMODESET | _displayMode);
-} //autoscroll
-
-/*
- * Turn autoscrolling off.
- */
-void SerLCD::noAutoscroll()
-{
-  _displayMode &= ~LCD_ENTRYSHIFTINCREMENT;
-  specialCommand(LCD_ENTRYMODESET | _displayMode);
-} //noAutoscroll
-
-/*
- * Change the contrast from 0 to 255. 120 is default.
- *
- * byte new_val - new contrast value
- */
-void SerLCD::setContrast(byte new_val)
-{
-  //send commands to the display to set backlights
-  beginTransmission();        // transmit to device
-  transmit(SETTING_COMMAND);  //Send contrast command
-  transmit(CONTRAST_COMMAND); //0x18
-  transmit(new_val);          //Send new contrast value
-  endTransmission();          //Stop transmission
-
-  delay(10); //Wait a little bit
-} //setContrast
-
-/*
- * Change the I2C Address. 0x72 is the default.
- * Note that this change is persistent.  If anything
- * goes wrong you may need to do a hardware reset
- * to unbrick the display.
- *
- * byte new_addr - new i2c address
- */
-void SerLCD::setAddress(byte new_addr)
-{
-  //send commands to the display to set backlights
-  beginTransmission();       // transmit to device on old address
-  transmit(SETTING_COMMAND); //Send contrast command
-  transmit(ADDRESS_COMMAND); //0x19
-  transmit(new_addr);        //Send new contrast value
-  endTransmission();         //Stop transmission
-
-  //Update our own address so we can still talk to the display
-  _i2cAddr = new_addr;
-
-  delay(50); //This may take awhile
-} //setContrast
