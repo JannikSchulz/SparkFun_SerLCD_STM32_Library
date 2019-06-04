@@ -34,7 +34,7 @@ Library written by Gaston Williams and Nathan Seidle ([SparkFun](http://www.spar
 There is no documentation yet.
 
 
-##License Information
+## License Information
 
 This product is ***open source*** Code under MIT Licence!
 
