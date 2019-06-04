@@ -65,15 +65,42 @@
 #define LCD_ERROR_STD 1				// error on display - not near declared
 #define LCD_ERROR_TRANSMIT_I2C 2	// error on display while transmission (i2c)
 
+
+char* displayPrepareText(uint16_t Value);
+
+
 uint8_t displayInit(I2C_HandleTypeDef *hi2c);
-uint8_t displayColor(uint8_t r, uint8_t g, uint8_t b);
 uint8_t displayCommand(uint8_t command);
 uint8_t displaySpecialCommand(uint8_t command);
-char* displayPrepareText(uint16_t Value);
-uint8_t displayWriteString(char *String, uint16_t Length);
-uint8_t DisplayClear();
+uint8_t displayClear();
 uint8_t displayHome();
 uint8_t displaySetCursor(uint8_t col, uint8_t row);
+uint8_t displayCreateChar(uint8_t location, uint8_t *charmap);
+uint8_t displayWriteChar(uint8_t location);
+uint8_t displayWrite(uint8_t b);
+uint8_t displayWriteString(char *buffer, uint16_t size);
+uint8_t displayOff();
+uint8_t displayNoDisplay();
+uint8_t displayOn();
+uint8_t displayDisplay();
+uint8_t displayNoCursor();
+uint8_t displayCursor();
+uint8_t displayNoBlink();
+uint8_t displayBlink();
+uint8_t displayScrollDisplayLeft();
+uint8_t displayScrollDisplayRight();
+uint8_t displayMoveCursorLeft();
+uint8_t displayMoveCursorRight();
+uint8_t displaySetBacklight(uint8_t r, uint8_t g, uint8_t b);
+uint8_t displaySetFastBacklight(uint8_t r, uint8_t g, uint8_t b);
+uint8_t displayEnableSystemMessages();
+uint8_t displayDisableSystemMessages();
+
+
+
+
+
+
 
 
 
