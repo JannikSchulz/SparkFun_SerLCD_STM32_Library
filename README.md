@@ -23,10 +23,7 @@ Library written by Gaston Williams and Nathan Seidle ([SparkFun](http://www.spar
 
 ## Repository Contents
 
-* **/examples** - Example sketches for the library (.ino). Run these from the Arduino IDE. 
-* **/src** - Source files for the library (.cpp, .h).
-* **keywords.txt** - Keywords from this library that will be highlighted in the Arduino IDE. 
-* **library.properties** - General library properties for the Arduino package manager. 
+* **/src** - Source files for the library (.c, .h).
 
 
 ## Documentation
