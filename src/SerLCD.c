@@ -1,15 +1,14 @@
 /**
- * SerLCD.h
- * @file		SerLCD.h
- * @brief 		STM32 Library for SparkFun OpenLCD display based on HAL
- * @date 		03.06.2019
- * @version		0.0.1
+ * @file		SerLCD.c
+ * @brief 		STM32 Library for SparkFun OpenLCD display based on HAL using I2C port
+ * @date 		11.06.2019
+ * @version		0.1.0
  * @author 		Mario Hesse
- * @copyright 	MIT Licence
+ * @copyright 	MIT License
  *
  *
- * Original information copied form LCD library for SparkFun RGB 3.3v Serial Open LCD display
- * ------------------------------------------------------------------------------------------
+ * Original information copied form "LCD library for SparkFun RGB 3.3v Serial Open LCD display"
+ * --------------------------------------------------------------------------------------------
  * LCD library for SparkFun RGB 3.3v Serial Open LCD display
  * with an attached Qwiic adapter.
  *
@@ -110,51 +109,11 @@ I2C_HandleTypeDef *_i2cHandler;
 uint8_t _displayControl = LCD_DISPLAYON | LCD_CURSOROFF | LCD_BLINKOFF;
 uint8_t _displayMode = LCD_ENTRYLEFT | LCD_ENTRYSHIFTDECREMENT;
 
-
-
-
-
-
-char* displayPrepareText(uint16_t Value)
-{
-	extern char DisplayText[DisplayChar];
-    strcpy(DisplayText, "ADC:      Bit ");				// create 1. row
-    //strcat(DisplayText, "                ");				// create 2. row
-    char ValueString[5] = {""};
-    snprintf(ValueString, 5, "%d", Value);
-
-    uint8_t i = 0;
-
-    // logic for right aligned number
-    if (ValueString[3] == 0)
-    	i=1;
-    else
-    	DisplayText[8+i] = ValueString[3];
-
-    if (ValueString[2] == 0)
-    	i=2;
-    else
-       	DisplayText[7+i] = ValueString[2];
-
-    if (ValueString[1] == 0)
-    	i=3;
-    else
-       	DisplayText[6+i] = ValueString[1];
-
-    if (ValueString[0] == 0)
-    	i=4;
-    else
-       	DisplayText[5+i] = ValueString[0];
-
-
-    return DisplayText;
-}
-
-
-
-
-
-
+/*
+ *******************************************************************************
+ * initial display functions
+ *******************************************************************************
+ */
 
 
 /**
@@ -169,43 +128,7 @@ uint8_t displayInit(I2C_HandleTypeDef *hi2c)
 {
 	uint8_t retval = LCD_OK;
 
-	uint8_t rows;
-	uint8_t columns;
-
 	_i2cHandler = hi2c;			// pointer for i2c handler is stored in library
-
-	// figure out row command
-	switch(MAX_ROWS)
-	{
-	case 1: 	rows = 0x07;
-				break;
-
-	case 2:		rows = 0x06;
-				break;
-
-	case 4: 	rows = 0x05;
-				break;
-
-	default:	rows = 0x07;
-				retval = LCD_ERROR_STD;
-				break;
-
-	}
-
-	// figure out column command
-	switch(MAX_COLUMNS)
-	{
-	case 16: 	columns = 0x04;
-				break;
-
-	case 20:	columns = 0x03;
-				break;
-
-	default:	columns = 0x04;
-				retval = LCD_ERROR_STD;
-				break;
-
-	}
 
 	// create i2c data stream
     uint8_t TransmitData[6] = {SPECIAL_COMMAND,									// special command character
@@ -218,58 +141,20 @@ uint8_t displayInit(I2C_HandleTypeDef *hi2c)
 
     // transmission of data stream
     if(HAL_I2C_Master_Transmit(_i2cHandler, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
-    	retval = LCD_ERROR_TRANSMIT_I2C;
+    	retval = LCD_ERROR;
+
+    HAL_Delay(50);
+
     return retval;
 }
 
 
 
-/**
- * @brief	Send a command to the display.
- * 			Used by other functions.
- * @retval	status 	- 0...OK, other...error
+/*
+ *******************************************************************************
+ * move on the display
+ *******************************************************************************
  */
-uint8_t displayCommand(uint8_t command)
-{
-	uint8_t retval = LCD_OK;
-	uint8_t TransmitData[2] = {SETTING_COMMAND, command}; 												// create data stream
-	if(HAL_I2C_Master_Transmit(&hi2c1, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
-		retval = LCD_ERROR_TRANSMIT_I2C;
-	HAL_Delay(10); //Wait a bit longer for special display commands
-	return retval;
-}
-
-
-
-/**
- * @brief	Send a special command to the display.  Used by other functions.
- * @retval	status (0...OK, other...error)
- */
-uint8_t displaySpecialCommand(uint8_t command)
-{
-	uint8_t retval = LCD_OK;
-	uint8_t TransmitData[2] = {SPECIAL_COMMAND, command}; 												// create data stream
-	if(HAL_I2C_Master_Transmit(&hi2c1, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
-		retval = LCD_ERROR_TRANSMIT_I2C;
-	HAL_Delay(50); //Wait a bit longer for special display commands
-	return retval;
-}
-
-
-
-/**
- * @brief	Send the clear command to the display.  This clears the
- * 			display and forces the cursor to return to the beginning
- * 			of the display.
- * @retval	status	- 0...OK, other...error
- */
-uint8_t displayClear()
-{
-	uint8_t retval = displayCommand(CLEAR_COMMAND);
-	HAL_Delay(10);
-	return retval;
-}
-
 
 
 /**
@@ -306,48 +191,94 @@ uint8_t displaySetCursor(uint8_t col, uint8_t row)
 
 
 /**
- * @brief	Create a customer character
- * @param	location - character number 0 to 7
- * @param	charmap  - byte array of 8 for character
- * @retval	status   - 0...OK, other...error
+ * @brief	Move the cursor one character to the left.
+ * @retval	status 	- 0...OK, other...error
  */
-uint8_t displayCreateChar(uint8_t location, uint8_t *charmap)
+uint8_t displayMoveCursorLeft()
 {
-  location &= 0x7; // we only have 8 locations 0-7
-
-  // create i2c data stream
-  uint8_t retval = LCD_OK;
-  uint8_t TransmitData[10] = {SETTING_COMMAND,
-		  	  	  	  	  	 27 + location,
-  	  	  	  	  	  	  	 &charmap[0],
-  	  	  	  	  	  	  	 &charmap[1],
-  	  	  	  	  	  	  	 &charmap[2],
-  	  	  	  	  	  	  	 &charmap[3],
-  	  	  	  	  	  	  	 &charmap[4],
-  	  	  	  	  	  	  	 &charmap[5],
-  	  	  	  	  	  	  	 &charmap[6],
-  	  	  	  	  	  	  	 &charmap[7]
-  	  	  	  	  	  	  	 };
-
-  // transmission of data stream
-  if(HAL_I2C_Master_Transmit(&hi2c1, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
-	  retval = LCD_ERROR_TRANSMIT_I2C;
-  HAL_Delay(50); //This takes a bit longer
-
-  return retval;
+  return displaySpecialCommand(LCD_CURSORSHIFT | LCD_CURSORMOVE | LCD_MOVELEFT);
 }
 
 
-/**
- * @brief	Write a customer character to the display
- * @param	location	- character number 0 to 7
- * @retval	status		- 0...OK, other...error
- */
-uint8_t displayWriteChar(uint8_t location)
-{
-  location &= 0x7; // we only have 8 locations 0-7
 
-  return displayCommand(35 + location);
+/**
+ * @brief	Move the cursor one character to the left.
+ * @retval	status 	- 0...OK, other...error
+ */
+uint8_t displayMoveCursorRight()
+{
+  return displaySpecialCommand(LCD_CURSORSHIFT | LCD_CURSORMOVE | LCD_MOVERIGHT);
+}
+
+
+
+/**
+ * @brief	Scroll the display one character to the left, without
+ * 			changing the text
+ * @retval	status 	- 0...OK, other...error
+ */
+uint8_t displayScrollDisplayLeft()
+{
+  return displaySpecialCommand(LCD_CURSORSHIFT | LCD_DISPLAYMOVE | LCD_MOVELEFT);
+}
+
+
+
+/**
+ * @brief	Scroll the display one character to the right, without
+ * 			changing the text
+ * @retval	status 	- 0...OK, other...error
+ */
+uint8_t displayScrollDisplayRight()
+{
+  return displaySpecialCommand(LCD_CURSORSHIFT | LCD_DISPLAYMOVE | LCD_MOVERIGHT);
+}
+
+
+
+/**
+ * @brief  	Turn autoscrolling on. This will 'right justify' text from
+ * 			the cursor.
+ * @retval	status 	- 0...OK, other...error
+ */
+uint8_t displayAutoscroll()
+{
+	 _displayMode |= LCD_ENTRYSHIFTINCREMENT;
+	 return displaySpecialCommand(LCD_ENTRYMODESET | _displayMode);
+}
+
+
+
+/**
+ * @brief  	Turn autoscrolling off.
+ * @retval	status 	- 0...OK, other...error
+ */
+uint8_t displayNoAutoscroll()
+{
+	 _displayMode &= ~LCD_ENTRYSHIFTINCREMENT;
+	 return displaySpecialCommand(LCD_ENTRYMODESET | _displayMode);
+}
+
+
+
+/*
+ *******************************************************************************
+ * write on the display
+ *******************************************************************************
+ */
+
+
+/**
+ * @brief	Send the clear command to the display.  This clears the
+ * 			display and forces the cursor to return to the beginning
+ * 			of the display.
+ * @retval	status	- 0...OK, other...error
+ */
+uint8_t displayClear()
+{
+	uint8_t retval = displayCommand(CLEAR_COMMAND);
+	HAL_Delay(10);
+	return retval;
 }
 
 
@@ -365,7 +296,7 @@ uint8_t displayWrite(uint8_t b)
 
 	// transmission of data stream
 	if(HAL_I2C_Master_Transmit(_i2cHandler, DISPLAY_ADDRESS1<<1, b, 1, 100) != HAL_OK)
-	  retval = LCD_ERROR_TRANSMIT_I2C;
+	  retval = LCD_ERROR;
 	HAL_Delay(10); // wait a bit
 
     return retval;
@@ -386,7 +317,7 @@ uint8_t displayWriteString(char *buffer, uint16_t size)
 
 	// transmission of data stream
 	if(HAL_I2C_Master_Transmit(_i2cHandler, DISPLAY_ADDRESS1<<1, buffer, size, 100) != HAL_OK)		// transmit data
-	  retval = LCD_ERROR_TRANSMIT_I2C;
+	  retval = LCD_ERROR;
 	HAL_Delay(50); //This takes a bit longer
 
     return retval;
@@ -395,25 +326,100 @@ uint8_t displayWriteString(char *buffer, uint16_t size)
 
 
 /**
- * @brief	Turn the display off quickly.
- * @retval	status 	- 0...OK, other...error
+ * @brief	Create a customer character
+ * @param	location - character number 0 to 7
+ * @param	charmap  - byte array of 8 for character
+ * @retval	status   - 0...OK, other...error
  */
-uint8_t displayOff()
+uint8_t displayCreateChar(uint8_t location, uint8_t *charmap)
 {
-  _displayControl &= ~LCD_DISPLAYON;
-  return displaySpecialCommand(LCD_DISPLAYCONTROL | _displayControl);
+  location &= 0x7; // we only have 8 locations 0-7
+
+  // create i2c data stream
+  uint8_t retval = LCD_OK;
+  uint8_t TransmitData[10] = {SETTING_COMMAND,
+		  	  	  	  	  	 27 + location,
+  	  	  	  	  	  	  	 charmap[0],
+  	  	  	  	  	  	  	 charmap[1],
+  	  	  	  	  	  	  	 charmap[2],
+  	  	  	  	  	  	  	 charmap[3],
+  	  	  	  	  	  	  	 charmap[4],
+  	  	  	  	  	  	  	 charmap[5],
+  	  	  	  	  	  	  	 charmap[6],
+  	  	  	  	  	  	  	 charmap[7]
+  	  	  	  	  	  	  	 };
+
+  // transmission of data stream
+  if(HAL_I2C_Master_Transmit(&hi2c1, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
+	  retval = LCD_ERROR;
+  HAL_Delay(50); //This takes a bit longer
+
+  return retval;
 }
 
 
 
 /**
- * @brief	Turn the display off quickly. Only included for compatibility
- * 			with SparkFun driver.
+ * @brief	Write a customer character to the display
+ * @param	location	- character number 0 to 7
+ * @retval	status		- 0...OK, other...error
+ */
+uint8_t displayWriteChar(uint8_t location)
+{
+  location &= 0x7; // we only have 8 locations 0-7
+
+  return displayCommand(35 + location);
+}
+
+
+
+/*
+ *******************************************************************************
+ * display align
+ *******************************************************************************
+ */
+
+
+/**
+ * @brief  	Set the text to flow from left to right.  This is the direction
+ * 			that is common to most Western languages.
+ * @retval	status 	- 0...OK, other...error
+ */
+uint8_t displayLeftToRight()
+{
+	_displayMode |= LCD_ENTRYLEFT;
+	return displaySpecialCommand(LCD_ENTRYMODESET | _displayMode);
+}
+
+
+
+/**
+ * @brief  	Set the text to flow from right to left.
+ * @retval	status 	- 0...OK, other...error
+ */
+uint8_t displayRightToLeft()
+{
+	 _displayMode &= ~LCD_ENTRYLEFT;
+	 return displaySpecialCommand(LCD_ENTRYMODESET | _displayMode);
+}
+
+
+
+/*
+ *******************************************************************************
+ * show and hide items
+ *******************************************************************************
+ */
+
+
+/**
+ * @brief	Turn the display off quickly.
  * @retval	status 	- 0...OK, other...error
  */
 uint8_t displayNoDisplay()
 {
-	return displayOff();
+	  _displayControl &= ~LCD_DISPLAYON;
+	  return displaySpecialCommand(LCD_DISPLAYCONTROL | _displayControl);
 }
 
 
@@ -422,22 +428,10 @@ uint8_t displayNoDisplay()
  * @brief	Turn the display on quickly.
  * @retval	status 	- 0...OK, other...error
  */
-uint8_t displayOn()
-{
-  _displayControl |= LCD_DISPLAYON;
-  return displaySpecialCommand(LCD_DISPLAYCONTROL | _displayControl);
-}
-
-
-
-/**
- * @brief	Turn the display on quickly. Only included for compatibility
- * 			with SparkFun driver.
- * @retval	status 	- 0...OK, other...error
- */
 uint8_t displayDisplay()
 {
-	return displayOn();
+	  _displayControl |= LCD_DISPLAYON;
+	  return displaySpecialCommand(LCD_DISPLAYCONTROL | _displayControl);
 }
 
 
@@ -492,49 +486,58 @@ uint8_t displayBlink()
 
 
 /**
- * @brief	Scroll the display one character to the left, without
- * 			changing the text
+ * @brief  	This allows user to see printing messages like 'UART: 57600'
+ * 			and 'Contrast: 5.
  * @retval	status 	- 0...OK, other...error
  */
-uint8_t displayScrollDisplayLeft()
+uint8_t displayEnableSystemMessages()
 {
-  return displaySpecialCommand(LCD_CURSORSHIFT | LCD_DISPLAYMOVE | LCD_MOVELEFT);
+	uint8_t retval = LCD_OK;
+
+	// create i2c data stream
+    uint8_t TransmitData[2] = {SETTING_COMMAND,									// special command character
+    						   ENABLE_SYSTEM_MESSAGE_DISPLAY, 					// set '.' character
+							   };
+
+    // transmission of data stream
+    if(HAL_I2C_Master_Transmit(&hi2c1, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
+    	retval = LCD_ERROR;
+    HAL_Delay(10);
+
+	return retval;
 }
 
 
 
 /**
- * @brief	Scroll the display one character to the right, without
- * 			changing the text
+ * @brief  	This allows user to disable printing messages like 'UART: 57600'
+ * 			and 'Contrast: 5'
  * @retval	status 	- 0...OK, other...error
  */
-uint8_t displayScrollDisplayRight()
+uint8_t displayDisableSystemMessages()
 {
-  return displaySpecialCommand(LCD_CURSORSHIFT | LCD_DISPLAYMOVE | LCD_MOVERIGHT);
+	uint8_t retval = LCD_OK;
+
+	// create i2c data stream
+    uint8_t TransmitData[2] = {SETTING_COMMAND,									// special command character
+    						   DISABLE_SYSTEM_MESSAGE_DISPLAY, 					// set '.' character
+							   };
+
+    // transmission of data stream
+    if(HAL_I2C_Master_Transmit(&hi2c1, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
+    	retval = LCD_ERROR;
+    HAL_Delay(10);
+
+	return retval;
 }
 
 
 
-/**
- * @brief	Move the cursor one character to the left.
- * @retval	status 	- 0...OK, other...error
+/*
+ *******************************************************************************
+ * display properties
+ *******************************************************************************
  */
-uint8_t displayMoveCursorLeft()
-{
-  return displaySpecialCommand(LCD_CURSORSHIFT | LCD_CURSORMOVE | LCD_MOVELEFT);
-}
-
-
-
-/**
- * @brief	Move the cursor one character to the left.
- * @retval	status 	- 0...OK, other...error
- */
-uint8_t displayMoveCursorRight()
-{
-  return displaySpecialCommand(LCD_CURSORSHIFT | LCD_CURSORMOVE | LCD_MOVERIGHT);
-}
-
 
 
 /**
@@ -568,7 +571,7 @@ uint8_t displaySetBacklight(uint8_t r, uint8_t g, uint8_t b)
 
     // transmission of data stream
     if(HAL_I2C_Master_Transmit(&hi2c1, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
-    	retval = LCD_ERROR_TRANSMIT_I2C;
+    	retval = LCD_ERROR;
     HAL_Delay(50);
 
 	return retval;
@@ -598,7 +601,7 @@ uint8_t displaySetFastBacklight(uint8_t r, uint8_t g, uint8_t b)
 
     // transmission of data stream
     if(HAL_I2C_Master_Transmit(&hi2c1, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
-    	retval = LCD_ERROR_TRANSMIT_I2C;
+    	retval = LCD_ERROR;
     HAL_Delay(10);
 
 	return retval;
@@ -607,22 +610,86 @@ uint8_t displaySetFastBacklight(uint8_t r, uint8_t g, uint8_t b)
 
 
 /**
- * @brief  	This allows user to see printing messages like 'UART: 57600'
- * 			and 'Contrast: 5.
+ * @brief  	Change the contrast from 0 to 255. 120 is default.
+ * @param	new_val - new contrast value
  * @retval	status 	- 0...OK, other...error
  */
-uint8_t displayEnableSystemMessages()
+uint8_t displaySetContrast(uint8_t new_val)
+{
+	uint8_t retval = LCD_OK;
+
+	// create i2c data stream
+    uint8_t TransmitData[3] = {SETTING_COMMAND,									// special command character
+    						   CONTRAST_COMMAND, 								// send contrast command
+							   new_val											// set new contrast value
+							   };
+
+    // transmission of data stream
+    if(HAL_I2C_Master_Transmit(&hi2c1, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
+    	retval = LCD_ERROR;
+    HAL_Delay(10);
+
+	return retval;
+}
+
+
+
+/*
+ * Change the I2C Address. 0x72 is the default.
+ * Note that this change is persistent.  If anything
+ * goes wrong you may need to do a hardware reset
+ * to unbrick the display.
+ *
+ * byte new_addr - new i2c address
+ */
+uint8_t displaySetAddress(uint8_t new_addr)
+{
+	uint8_t retval = LCD_OK;
+
+	// create i2c data stream
+    uint8_t TransmitData[3] = {SETTING_COMMAND,									// special command character
+    						   ADDRESS_COMMAND, 								// send address command
+							   new_addr											// set new address
+							   };
+
+    // transmission of data stream
+    if(HAL_I2C_Master_Transmit(&hi2c1, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
+    	retval = LCD_ERROR;
+
+    //Update our own address so we can still talk to the display
+    if(retval == LCD_OK)
+    	_i2cAddr = new_addr;
+
+    HAL_Delay(50);	 //This may take awhile
+
+	return retval;
+}
+
+
+
+/*
+ *******************************************************************************
+ * edit splash screen
+ *******************************************************************************
+ */
+
+
+/**
+ * @brief  	Enable splash screen at power on
+ * @retval	status 	- 0...OK, other...error
+ */
+uint8_t displayEnableSplash()
 {
 	uint8_t retval = LCD_OK;
 
 	// create i2c data stream
     uint8_t TransmitData[2] = {SETTING_COMMAND,									// special command character
-    						   ENABLE_SYSTEM_MESSAGE_DISPLAY, 					// set '.' character
+    						   ENABLE_SPLASH_DISPLAY, 							// set '.' character
 							   };
 
     // transmission of data stream
     if(HAL_I2C_Master_Transmit(&hi2c1, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
-    	retval = LCD_ERROR_TRANSMIT_I2C;
+    	retval = LCD_ERROR;
     HAL_Delay(10);
 
 	return retval;
@@ -631,26 +698,96 @@ uint8_t displayEnableSystemMessages()
 
 
 /**
- * @brief  	This allows user to disable printing messages like 'UART: 57600'
- * 			and 'Contrast: 5'
+ * @brief  	Disable splash screen at power on
  * @retval	status 	- 0...OK, other...error
  */
-uint8_t displayDisableSystemMessages()
+uint8_t displayDisableSplash()
 {
 	uint8_t retval = LCD_OK;
 
 	// create i2c data stream
     uint8_t TransmitData[2] = {SETTING_COMMAND,									// special command character
-    						   DISABLE_SYSTEM_MESSAGE_DISPLAY, 					// set '.' character
+    						   DISABLE_SPLASH_DISPLAY, 							// set '.' character
 							   };
 
     // transmission of data stream
     if(HAL_I2C_Master_Transmit(&hi2c1, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
-    	retval = LCD_ERROR_TRANSMIT_I2C;
+    	retval = LCD_ERROR;
     HAL_Delay(10);
 
 	return retval;
 }
+
+
+
+/**
+ * @brief  	Save the current display as the splash
+ * @retval	status 	- 0...OK, other...error
+ */
+uint8_t displaySaveSplash()
+{
+	uint8_t retval = LCD_OK;
+
+	// create i2c data stream
+    uint8_t TransmitData[2] = {SETTING_COMMAND,									// special command character
+    						   SAVE_CURRENT_DISPLAY_AS_SPLASH, 					// set Ctrl+j character
+							   };
+
+    // transmission of data stream
+    if(HAL_I2C_Master_Transmit(&hi2c1, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
+    	retval = LCD_ERROR;
+    HAL_Delay(10);
+
+	return retval;
+}
+
+
+
+/*
+ *******************************************************************************
+ * only for internal use - don't touch!
+ *******************************************************************************
+ */
+
+
+/**
+ * @brief	Send a command to the display.
+ * 			Used by other functions.
+ * @retval	status 	- 0...OK, other...error
+ */
+uint8_t displayCommand(uint8_t command)
+{
+	uint8_t retval = LCD_OK;
+	uint8_t TransmitData[2] = {SETTING_COMMAND, command}; 												// create data stream
+	if(HAL_I2C_Master_Transmit(&hi2c1, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
+		retval = LCD_ERROR;
+	HAL_Delay(10); //Wait a bit longer for special display commands
+	return retval;
+}
+
+
+
+/**
+ * @brief	Send a special command to the display.  Used by other functions.
+ * @retval	status (0...OK, other...error)
+ */
+uint8_t displaySpecialCommand(uint8_t command)
+{
+	uint8_t retval = LCD_OK;
+	uint8_t TransmitData[2] = {SPECIAL_COMMAND, command}; 												// create data stream
+	if(HAL_I2C_Master_Transmit(&hi2c1, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
+		retval = LCD_ERROR;
+	HAL_Delay(50); //Wait a bit longer for special display commands
+	return retval;
+}
+
+
+
+
+
+
+
+
 
 
 
