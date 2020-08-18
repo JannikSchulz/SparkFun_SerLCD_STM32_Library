@@ -10,7 +10,6 @@
 #ifndef INC_SERLCD_H_
 #define INC_SERLCD_H_
 
-#include "stm32f3xx_hal.h"
 #include "main.h"
 
 
