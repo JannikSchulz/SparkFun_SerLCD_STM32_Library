@@ -346,7 +346,7 @@ uint8_t displayCreateChar(uint8_t location, uint8_t *charmap)
   	  	  	  	  	  	  	 };
 
   // transmission of data stream
-  if(HAL_I2C_Master_Transmit(&hi2c1, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
+  if(HAL_I2C_Master_Transmit(&_i2cHandler, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
 	  retval = LCD_ERROR;
   HAL_Delay(50); //This takes a bit longer
 
@@ -496,7 +496,7 @@ uint8_t displayEnableSystemMessages()
 							   };
 
     // transmission of data stream
-    if(HAL_I2C_Master_Transmit(&hi2c1, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
+    if(HAL_I2C_Master_Transmit(&_i2cHandler, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
     	retval = LCD_ERROR;
     HAL_Delay(10);
 
@@ -520,7 +520,7 @@ uint8_t displayDisableSystemMessages()
 							   };
 
     // transmission of data stream
-    if(HAL_I2C_Master_Transmit(&hi2c1, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
+    if(HAL_I2C_Master_Transmit(&_i2cHandler, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
     	retval = LCD_ERROR;
     HAL_Delay(10);
 
@@ -566,7 +566,7 @@ uint8_t displaySetBacklight(uint8_t r, uint8_t g, uint8_t b)
 								LCD_DISPLAYCONTROL | (_displayControl |= LCD_DISPLAYON)}; // turn display off as before
 
     // transmission of data stream
-    if(HAL_I2C_Master_Transmit(&hi2c1, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
+    if(HAL_I2C_Master_Transmit(&_i2cHandler, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
     	retval = LCD_ERROR;
     HAL_Delay(50);
 
@@ -596,7 +596,7 @@ uint8_t displaySetFastBacklight(uint8_t r, uint8_t g, uint8_t b)
     						   };
 
     // transmission of data stream
-    if(HAL_I2C_Master_Transmit(&hi2c1, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
+    if(HAL_I2C_Master_Transmit(&_i2cHandler, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
     	retval = LCD_ERROR;
     HAL_Delay(10);
 
@@ -621,7 +621,7 @@ uint8_t displaySetContrast(uint8_t new_val)
 							   };
 
     // transmission of data stream
-    if(HAL_I2C_Master_Transmit(&hi2c1, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
+    if(HAL_I2C_Master_Transmit(&_i2cHandler, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
     	retval = LCD_ERROR;
     HAL_Delay(10);
 
@@ -649,7 +649,7 @@ uint8_t displaySetAddress(uint8_t new_addr)
 							   };
 
     // transmission of data stream
-    if(HAL_I2C_Master_Transmit(&hi2c1, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
+    if(HAL_I2C_Master_Transmit(&_i2cHandler, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
     	retval = LCD_ERROR;
 
     //Update our own address so we can still talk to the display
@@ -684,7 +684,7 @@ uint8_t displayEnableSplash()
 							   };
 
     // transmission of data stream
-    if(HAL_I2C_Master_Transmit(&hi2c1, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
+    if(HAL_I2C_Master_Transmit(&_i2cHandler, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
     	retval = LCD_ERROR;
     HAL_Delay(10);
 
@@ -707,7 +707,7 @@ uint8_t displayDisableSplash()
 							   };
 
     // transmission of data stream
-    if(HAL_I2C_Master_Transmit(&hi2c1, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
+    if(HAL_I2C_Master_Transmit(&_i2cHandler, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
     	retval = LCD_ERROR;
     HAL_Delay(10);
 
@@ -730,7 +730,7 @@ uint8_t displaySaveSplash()
 							   };
 
     // transmission of data stream
-    if(HAL_I2C_Master_Transmit(&hi2c1, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
+    if(HAL_I2C_Master_Transmit(&_i2cHandler, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
     	retval = LCD_ERROR;
     HAL_Delay(10);
 
@@ -755,7 +755,7 @@ uint8_t displayCommand(uint8_t command)
 {
 	uint8_t retval = LCD_OK;
 	uint8_t TransmitData[2] = {SETTING_COMMAND, command}; 												// create data stream
-	if(HAL_I2C_Master_Transmit(&hi2c1, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
+	if(HAL_I2C_Master_Transmit(&_i2cHandler, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
 		retval = LCD_ERROR;
 	HAL_Delay(10); //Wait a bit longer for special display commands
 	return retval;
@@ -771,7 +771,7 @@ uint8_t displaySpecialCommand(uint8_t command)
 {
 	uint8_t retval = LCD_OK;
 	uint8_t TransmitData[2] = {SPECIAL_COMMAND, command}; 												// create data stream
-	if(HAL_I2C_Master_Transmit(&hi2c1, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
+	if(HAL_I2C_Master_Transmit(&_i2cHandler, DISPLAY_ADDRESS1<<1, TransmitData, sizeof(TransmitData), 100) != HAL_OK)		// transmit data
 		retval = LCD_ERROR;
 	HAL_Delay(50); //Wait a bit longer for special display commands
 	return retval;
