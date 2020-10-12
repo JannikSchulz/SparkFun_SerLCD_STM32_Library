@@ -1,6 +1,12 @@
 SparkFun SerLCD Library
 ===========================================================
 
+Important, important, important!
+--------------------------------
+
+This library was moved to [https://gitlab.gwdg.de/mario.hesse/sparkfun-serlcd-library-for-stm32](https://gitlab.gwdg.de/mario.hesse/sparkfun-serlcd-library-for-stm32). Here you can only see the old version from 12/10/202020.
+
+
 ![SparkFun SerLCD](https://cdn.sparkfun.com//assets/parts/1/1/9/2/7/14074-SparkFun_20x4_SerLCD_-_Black_on_RGB_3.3V-05.jpg)
 
 [*SparkFun 20x4 SerLCD - Black on RGB 3.3V (LCD-14074)*](https://www.sparkfun.com/products/14074)
